@@ -1,13 +1,17 @@
 use noise::{NoiseFn, Perlin};
-use rand::{RngCore, rngs::StdRng, SeedableRng};
+use rand::{rngs::StdRng, RngCore, SeedableRng};
 
+use crate::util::inverse_lerp;
+
+#[derive(Debug, Copy, Clone)]
 pub struct NoiseParameters {
-    pub scale: u8,
+    pub scale: f64,
     pub octaves: usize,
     pub persistence: f64,
     pub lacunarity: f64,
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct FalloffParameters {
     pub a: f64,
     pub b: f64,
@@ -18,20 +22,38 @@ pub struct NoiseMap {
     pub map: Vec<f64>,
     pub min: f64,
     pub max: f64,
+    width: usize,
+    height: usize,
 }
 
 impl NoiseMap {
-    pub fn normalized(&self, value: f64) -> f64 {
-        (value - self.min) / (self.max - self.min)
+    pub fn normalize(&self, value: f64) -> f64 {
+        inverse_lerp(self.min, self.max, value)
     }
 
-    pub(crate) fn new(seed: u64, width: usize, height: usize, parameters: &NoiseParameters) -> NoiseMap {
+    pub fn get(&self, x: usize, y: usize) -> f64 {
+        self.map[y * self.width + x]
+    }
+
+    pub fn get_normalized(&self, x: usize, y: usize) -> f64 {
+        self.normalize(self.map[y * self.width + x])
+    }
+
+    pub(crate) fn new(
+        seed: u64,
+        width: usize,
+        height: usize,
+        parameters: &NoiseParameters,
+    ) -> NoiseMap {
         let mut random = StdRng::seed_from_u64(seed);
         let perlin = Perlin::new();
 
         let mut map = Vec::with_capacity(width * height);
 
-        let octave_offsets: Vec<(u32, u32)> = (0..parameters.octaves).into_iter().map(|_| (random.next_u32(), random.next_u32())).collect();
+        let octave_offsets: Vec<(u32, u32)> = (0..parameters.octaves)
+            .into_iter()
+            .map(|_| (random.next_u32(), random.next_u32()))
+            .collect();
 
         let mut min = f64::INFINITY;
         let mut max = f64::NEG_INFINITY;
@@ -43,8 +65,12 @@ impl NoiseMap {
                 let mut value = 0.0;
 
                 for i in 0..parameters.octaves {
-                    let sample_x = (x as f64 - width as f64 / 2.0 + octave_offsets[i].0 as f64) / parameters.scale as f64 * frequency;
-                    let sample_y = (y as f64 - height as f64 / 2.0 + octave_offsets[i].1 as f64) / parameters.scale as f64 * frequency;
+                    let sample_x = frequency
+                        * (x as f64 - width as f64 / 2.0 + octave_offsets[i].0 as f64)
+                        / (parameters.scale * width as f64);
+                    let sample_y = frequency
+                        * (y as f64 - height as f64 / 2.0 + octave_offsets[i].1 as f64)
+                        / (parameters.scale * height as f64);
 
                     let sample = perlin.get([sample_x, sample_y]);
                     value += amplitude * sample;
@@ -52,8 +78,12 @@ impl NoiseMap {
                     frequency *= parameters.lacunarity;
                 }
 
-                if value < min { min = value }
-                if value > max { max = value }
+                if value < min {
+                    min = value
+                }
+                if value > max {
+                    max = value
+                }
 
                 map.push(value);
             }
@@ -63,9 +93,17 @@ impl NoiseMap {
             map,
             min,
             max,
+            width,
+            height,
         }
     }
-    pub fn new_with_falloff(seed: u64, width: usize, height: usize, parameters: &NoiseParameters, falloff: &FalloffParameters) -> NoiseMap {
+    pub fn new_with_falloff(
+        seed: u64,
+        width: usize,
+        height: usize,
+        parameters: &NoiseParameters,
+        falloff: &FalloffParameters,
+    ) -> NoiseMap {
         let mut map = Self::new(seed, width, height, parameters);
 
         for y in 0..height {
@@ -87,4 +125,3 @@ impl NoiseMap {
         value.powf(a) / (value.powf(a) + (b - b * value).powf(a))
     }
 }
-
