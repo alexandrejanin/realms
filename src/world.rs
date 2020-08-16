@@ -26,9 +26,8 @@ impl World {
         }
     }
 
-    pub fn generate(&mut self, seed: u64) {
-        self.seed = seed;
-        self.elevation = Self::generate_elevation(seed, &self.parameters);
+    pub fn generate(&mut self) {
+        self.elevation = Self::generate_elevation(self.seed, &self.parameters);
     }
 
     fn generate_elevation(seed: u64, parameters: &WorldParameters) -> NoiseMap {

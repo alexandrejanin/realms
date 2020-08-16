@@ -9,7 +9,7 @@ use ggez::{
 use rand::{thread_rng, RngCore};
 
 use crate::util::{inverse_lerp, lerp};
-use crate::world::World;
+use crate::world::{World, WorldParameters};
 
 pub struct Color {
     pub r: u8,
@@ -90,7 +90,10 @@ impl<'f> WorldViewer<'f> {
                 &self.colors.sea_high,
                 inverse_lerp(
                     self.world.elevation.min,
-                    self.world.parameters.sea_level,
+                    self.world
+                        .parameters
+                        .sea_level
+                        .min(self.world.elevation.max),
                     value,
                 ),
             )
@@ -99,7 +102,10 @@ impl<'f> WorldViewer<'f> {
                 &self.colors.land_low,
                 &self.colors.land_high,
                 inverse_lerp(
-                    self.world.parameters.sea_level,
+                    self.world
+                        .parameters
+                        .sea_level
+                        .max(self.world.elevation.min),
                     self.world.elevation.max,
                     value,
                 ),
@@ -125,7 +131,7 @@ impl<'f> WorldViewer<'f> {
                 "{}x{}",
                 self.world.parameters.width, self.world.parameters.height,
             ),
-            format!("{:?}", self.world.parameters),
+            format!("{:#?}", self.world.parameters),
         ]
     }
 }
@@ -158,8 +164,7 @@ impl<'f> EventHandler for WorldViewer<'f> {
 
         graphics::draw(
             ctx,
-            graphics::Text::new(TextFragment::new(self.status_text().join("\n")).font(*self.font))
-                .set_bounds([200.0, 1000.0], graphics::Align::Left),
+            &graphics::Text::new(TextFragment::new(self.status_text().join("\n")).font(*self.font)),
             DrawParam::default(),
         )?;
 
@@ -211,6 +216,18 @@ impl<'f> EventHandler for WorldViewer<'f> {
     ) {
         if keycode == KeyCode::Space && !repeat {
             self.world = World::new(thread_rng().next_u64(), self.world.parameters);
+            self.update_buffer();
+        }
+
+        if keycode == KeyCode::Right {
+            self.world.parameters.sea_level += 0.1;
+            self.world.generate();
+            self.update_buffer();
+        }
+
+        if keycode == KeyCode::Left {
+            self.world.parameters.sea_level -= 0.1;
+            self.world.generate();
             self.update_buffer();
         }
     }

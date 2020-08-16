@@ -1,3 +1,4 @@
+use ggez::conf::WindowSetup;
 use ggez::{conf::WindowMode, event, graphics::Font, ContextBuilder, GameResult};
 use rand::{thread_rng, RngCore};
 
@@ -20,15 +21,16 @@ fn main() -> GameResult {
                 .dimensions(1000.0, 1000.0)
                 .resizable(true),
         )
+        .window_setup(WindowSetup::default().title("Realms"))
         .build()
         .expect("could not create ggez context!");
 
     let world = World::new(
         thread_rng().next_u64(),
         WorldParameters {
-            width: 2000,
-            height: 2000,
-            sea_level: 0.0,
+            width: 250,
+            height: 250,
+            sea_level: -0.1,
             elevation_parameters: NoiseParameters {
                 scale: 0.2,
                 octaves: 8,
