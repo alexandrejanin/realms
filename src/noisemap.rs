@@ -3,7 +3,7 @@ use rand::{rngs::StdRng, RngCore, SeedableRng};
 
 use crate::util::inverse_lerp;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct NoiseParameters {
     pub scale: f64,
     pub octaves: usize,
@@ -11,7 +11,7 @@ pub struct NoiseParameters {
     pub lacunarity: f64,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct FalloffParameters {
     pub a: f64,
     pub b: f64,
@@ -51,7 +51,6 @@ impl NoiseMap {
         let mut map = Vec::with_capacity(width * height);
 
         let octave_offsets: Vec<(u32, u32)> = (0..parameters.octaves)
-            .into_iter()
             .map(|_| (random.next_u32(), random.next_u32()))
             .collect();
 
@@ -64,12 +63,10 @@ impl NoiseMap {
                 let mut frequency = 1.0;
                 let mut value = 0.0;
 
-                for i in 0..parameters.octaves {
-                    let sample_x = frequency
-                        * (x as f64 - width as f64 / 2.0 + octave_offsets[i].0 as f64)
+                for (offset_x, offset_y) in &octave_offsets {
+                    let sample_x = frequency * (x as f64 - width as f64 / 2.0 + *offset_x as f64)
                         / (parameters.scale * width as f64);
-                    let sample_y = frequency
-                        * (y as f64 - height as f64 / 2.0 + octave_offsets[i].1 as f64)
+                    let sample_y = frequency * (y as f64 - height as f64 / 2.0 + *offset_y as f64)
                         / (parameters.scale * height as f64);
 
                     let sample = perlin.get([sample_x, sample_y]);

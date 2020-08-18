@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 use ggez::conf::WindowSetup;
 use ggez::{conf::WindowMode, event, graphics::Font, ContextBuilder, GameResult};
 use rand::{thread_rng, RngCore};
@@ -18,7 +20,7 @@ fn main() -> GameResult {
     let (mut ctx, mut event_loop) = ContextBuilder::new("Realms", "KBanana")
         .window_mode(
             WindowMode::default()
-                .dimensions(1000.0, 1000.0)
+                .dimensions(600.0, 600.0)
                 .resizable(true),
         )
         .window_setup(WindowSetup::default().title("Realms"))
@@ -28,14 +30,14 @@ fn main() -> GameResult {
     let world = World::new(
         thread_rng().next_u64(),
         WorldParameters {
-            width: 250,
-            height: 250,
-            sea_level: -0.1,
+            width: 500,
+            height: 500,
+            sea_level: 0.0,
             elevation_parameters: NoiseParameters {
                 scale: 0.2,
                 octaves: 8,
                 persistence: 0.35,
-                lacunarity: 3.5,
+                lacunarity: 4.0,
             },
             falloff: Some(FalloffParameters {
                 a: 2.0,
@@ -54,8 +56,8 @@ fn main() -> GameResult {
         Colors {
             sea_low: Color::rgb(35, 45, 84),
             sea_high: Color::rgb(51, 98, 153),
-            land_low: Color::rgb(88, 126, 92),
-            land_high: Color::rgb(190, 200, 200),
+            land_low: Color::rgb(33, 156, 53),
+            land_high: Color::rgb(100, 230, 80),
         },
         &font,
     );

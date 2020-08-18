@@ -1,6 +1,6 @@
 use crate::noisemap::{FalloffParameters, NoiseMap, NoiseParameters};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct WorldParameters {
     pub width: usize,
     pub height: usize,

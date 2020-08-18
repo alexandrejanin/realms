@@ -51,6 +51,8 @@ pub struct WorldViewer<'f> {
     last_mouse_x: f32,
     last_mouse_y: f32,
     font: &'f Font,
+    current_row: usize,
+    rows: Vec<EditableRow>,
 }
 
 impl<'f> WorldViewer<'f> {
@@ -65,12 +67,58 @@ impl<'f> WorldViewer<'f> {
             mouse_down: false,
             last_mouse_x: 0.0,
             last_mouse_y: 0.0,
+            current_row: 0,
+            rows: vec![
+                EditableRow {
+                    text: Box::new(|parameters| format!("sea level: {:.2}", parameters.sea_level)),
+                    edit: Box::new(|parameters, action| match action {
+                        EditType::Increase => parameters.sea_level += 0.1,
+                        EditType::Decrease => parameters.sea_level -= 0.1,
+                        _ => {}
+                    }),
+                },
+                EditableRow {
+                    text: Box::new(|parameters| {
+                        format!("octaves: {}", parameters.elevation_parameters.octaves)
+                    }),
+                    edit: Box::new(|parameters, action| match action {
+                        EditType::Increase => parameters.elevation_parameters.octaves += 1,
+                        EditType::Decrease => parameters.elevation_parameters.octaves -= 1,
+                        _ => {}
+                    }),
+                },
+                EditableRow {
+                    text: Box::new(|parameters| {
+                        format!(
+                            "persistence: {:.2}",
+                            parameters.elevation_parameters.persistence,
+                        )
+                    }),
+                    edit: Box::new(|parameters, action| match action {
+                        EditType::Increase => parameters.elevation_parameters.persistence += 0.05,
+                        EditType::Decrease => parameters.elevation_parameters.persistence -= 0.05,
+                        _ => {}
+                    }),
+                },
+                EditableRow {
+                    text: Box::new(|parameters| {
+                        format!(
+                            "lacunarity: {:.2}",
+                            parameters.elevation_parameters.lacunarity,
+                        )
+                    }),
+                    edit: Box::new(|parameters, action| match action {
+                        EditType::Increase => parameters.elevation_parameters.lacunarity += 0.05,
+                        EditType::Decrease => parameters.elevation_parameters.lacunarity -= 0.05,
+                        _ => {}
+                    }),
+                },
+            ],
         }
     }
 
     pub fn update_buffer(&mut self) {
         self.buffer = (0..self.world.parameters.width * self.world.parameters.height)
-            .into_iter()
             .flat_map(|i| {
                 self.pixel_color(
                     i % self.world.parameters.width,
@@ -124,16 +172,6 @@ impl<'f> WorldViewer<'f> {
     fn interpolate_u8(a: u8, b: u8, value: f64) -> u8 {
         lerp(a as f64, b as f64, value) as u8
     }
-
-    fn status_text(&self) -> Vec<String> {
-        vec![
-            format!(
-                "{}x{}",
-                self.world.parameters.width, self.world.parameters.height,
-            ),
-            format!("{:#?}", self.world.parameters),
-        ]
-    }
 }
 
 impl<'f> EventHandler for WorldViewer<'f> {
@@ -162,9 +200,24 @@ impl<'f> EventHandler for WorldViewer<'f> {
             },
         )?;
 
+        let text: String = self
+            .rows
+            .iter()
+            .enumerate()
+            .map(|(i, row)| {
+                let text = (row.text)(&self.world.parameters);
+                if i == self.current_row {
+                    format!("< {} >", text)
+                } else {
+                    format!("  {}  ", text)
+                }
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+
         graphics::draw(
             ctx,
-            &graphics::Text::new(TextFragment::new(self.status_text().join("\n")).font(*self.font)),
+            &graphics::Text::new(TextFragment::new(text).font(*self.font)),
             DrawParam::default(),
         )?;
 
@@ -209,26 +262,61 @@ impl<'f> EventHandler for WorldViewer<'f> {
 
     fn key_down_event(
         &mut self,
-        ctx: &mut Context,
+        _ctx: &mut Context,
         keycode: KeyCode,
         _keymods: KeyMods,
         repeat: bool,
     ) {
-        if keycode == KeyCode::Space && !repeat {
+        if keycode == KeyCode::Return && !repeat {
             self.world = World::new(thread_rng().next_u64(), self.world.parameters);
             self.update_buffer();
         }
 
-        if keycode == KeyCode::Right {
-            self.world.parameters.sea_level += 0.1;
-            self.world.generate();
-            self.update_buffer();
+        if keycode == KeyCode::Up {
+            if self.current_row == 0 {
+                self.current_row = self.rows.len() - 1
+            } else {
+                self.current_row -= 1
+            }
         }
 
-        if keycode == KeyCode::Left {
-            self.world.parameters.sea_level -= 0.1;
+        if keycode == KeyCode::Down {
+            if self.current_row >= self.rows.len() {
+                self.current_row = 0
+            } else {
+                self.current_row += 1;
+            }
+        }
+
+        if keycode == KeyCode::Right || keycode == KeyCode::Left {
+            let row = &mut self.rows[self.current_row];
+            (row.edit)(
+                &mut self.world.parameters,
+                match keycode {
+                    KeyCode::Space => EditType::Press,
+                    KeyCode::Right => EditType::Increase,
+                    KeyCode::Left => EditType::Decrease,
+                    _ => panic!(),
+                },
+            );
             self.world.generate();
             self.update_buffer();
         }
     }
+
+    fn resize_event(&mut self, ctx: &mut Context, width: f32, height: f32) {
+        graphics::set_screen_coordinates(ctx, graphics::Rect::new(0.0, 0.0, width, height))
+            .expect("Could not set screen coordinates");
+    }
+}
+
+enum EditType {
+    Increase,
+    Decrease,
+    Press,
+}
+
+struct EditableRow {
+    text: Box<dyn Fn(&WorldParameters) -> String>,
+    edit: Box<dyn FnMut(&mut WorldParameters, EditType)>,
 }
