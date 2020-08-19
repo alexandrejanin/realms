@@ -26,10 +26,6 @@ impl World {
         }
     }
 
-    pub fn generate(&mut self) {
-        self.elevation = Self::generate_elevation(self.seed, &self.parameters);
-    }
-
     fn generate_elevation(seed: u64, parameters: &WorldParameters) -> NoiseMap {
         match &parameters.falloff {
             Some(falloff) => NoiseMap::new_with_falloff(

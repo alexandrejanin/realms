@@ -13,6 +13,7 @@ use crate::{
 
 mod noisemap;
 mod util;
+#[macro_use]
 mod viewer;
 mod world;
 
@@ -34,10 +35,10 @@ fn main() -> GameResult {
             height: 500,
             sea_level: 0.0,
             elevation_parameters: NoiseParameters {
-                scale: 0.2,
+                scale: 0.25,
                 octaves: 8,
-                persistence: 0.35,
-                lacunarity: 4.0,
+                persistence: 0.4,
+                lacunarity: 3.5,
             },
             falloff: Some(FalloffParameters {
                 a: 2.0,

@@ -11,6 +11,19 @@ use rand::{thread_rng, RngCore};
 use crate::util::{inverse_lerp, lerp};
 use crate::world::{World, WorldParameters};
 
+macro_rules! bool_row {
+    ($t:expr, $i:ident) => {
+        EditableRow {
+            text: Box::new(|parameters| format!($t, if parameters.$i { '■' } else { '□' },)),
+            edit: Box::new(|parameters, action| {
+                if let EditType::Press = action {
+                    parameters.$i = !parameters.$i
+                }
+            }),
+        }
+    };
+}
+
 pub struct Color {
     pub r: u8,
     pub g: u8,
@@ -41,6 +54,12 @@ pub struct Colors {
     pub land_high: Color,
 }
 
+pub struct WorldViewerParameters {
+    world: WorldParameters,
+    auto_generate: bool,
+    shuffle_seed: bool,
+}
+
 pub struct WorldViewer<'f> {
     world: World,
     colors: Colors,
@@ -51,6 +70,7 @@ pub struct WorldViewer<'f> {
     last_mouse_x: f32,
     last_mouse_y: f32,
     font: &'f Font,
+    parameters: WorldViewerParameters,
     current_row: usize,
     rows: Vec<EditableRow>,
 }
@@ -59,7 +79,6 @@ impl<'f> WorldViewer<'f> {
     pub fn new(world: World, colors: Colors, font: &'f Font) -> Self {
         Self {
             scale: 1000.0 / world.parameters.width as f32,
-            world,
             colors,
             font,
             buffer: vec![],
@@ -67,23 +86,31 @@ impl<'f> WorldViewer<'f> {
             mouse_down: false,
             last_mouse_x: 0.0,
             last_mouse_y: 0.0,
+            parameters: WorldViewerParameters {
+                world: world.parameters,
+                auto_generate: true,
+                shuffle_seed: true,
+            },
+            world,
             current_row: 0,
             rows: vec![
                 EditableRow {
-                    text: Box::new(|parameters| format!("sea level: {:.2}", parameters.sea_level)),
+                    text: Box::new(|parameters| {
+                        format!("sea level: {:.2}", parameters.world.sea_level)
+                    }),
                     edit: Box::new(|parameters, action| match action {
-                        EditType::Increase => parameters.sea_level += 0.1,
-                        EditType::Decrease => parameters.sea_level -= 0.1,
+                        EditType::Right => parameters.world.sea_level += 0.1,
+                        EditType::Left => parameters.world.sea_level -= 0.1,
                         _ => {}
                     }),
                 },
                 EditableRow {
                     text: Box::new(|parameters| {
-                        format!("octaves: {}", parameters.elevation_parameters.octaves)
+                        format!("octaves: {}", parameters.world.elevation_parameters.octaves)
                     }),
                     edit: Box::new(|parameters, action| match action {
-                        EditType::Increase => parameters.elevation_parameters.octaves += 1,
-                        EditType::Decrease => parameters.elevation_parameters.octaves -= 1,
+                        EditType::Right => parameters.world.elevation_parameters.octaves += 1,
+                        EditType::Left => parameters.world.elevation_parameters.octaves -= 1,
                         _ => {}
                     }),
                 },
@@ -91,12 +118,14 @@ impl<'f> WorldViewer<'f> {
                     text: Box::new(|parameters| {
                         format!(
                             "persistence: {:.2}",
-                            parameters.elevation_parameters.persistence,
+                            parameters.world.elevation_parameters.persistence,
                         )
                     }),
                     edit: Box::new(|parameters, action| match action {
-                        EditType::Increase => parameters.elevation_parameters.persistence += 0.05,
-                        EditType::Decrease => parameters.elevation_parameters.persistence -= 0.05,
+                        EditType::Right => {
+                            parameters.world.elevation_parameters.persistence += 0.05
+                        }
+                        EditType::Left => parameters.world.elevation_parameters.persistence -= 0.05,
                         _ => {}
                     }),
                 },
@@ -104,15 +133,27 @@ impl<'f> WorldViewer<'f> {
                     text: Box::new(|parameters| {
                         format!(
                             "lacunarity: {:.2}",
-                            parameters.elevation_parameters.lacunarity,
+                            parameters.world.elevation_parameters.lacunarity,
                         )
                     }),
                     edit: Box::new(|parameters, action| match action {
-                        EditType::Increase => parameters.elevation_parameters.lacunarity += 0.05,
-                        EditType::Decrease => parameters.elevation_parameters.lacunarity -= 0.05,
+                        EditType::Right => parameters.world.elevation_parameters.lacunarity += 0.05,
+                        EditType::Left => parameters.world.elevation_parameters.lacunarity -= 0.05,
                         _ => {}
                     }),
                 },
+                EditableRow {
+                    text: Box::new(|parameters| {
+                        format!("scale: {:.2}", parameters.world.elevation_parameters.scale,)
+                    }),
+                    edit: Box::new(|parameters, action| match action {
+                        EditType::Right => parameters.world.elevation_parameters.scale *= 1.1,
+                        EditType::Left => parameters.world.elevation_parameters.scale /= 1.1,
+                        _ => {}
+                    }),
+                },
+                bool_row!("shuffle seed: {}", shuffle_seed),
+                bool_row!("auto generate: {}", auto_generate),
             ],
         }
     }
@@ -127,6 +168,11 @@ impl<'f> WorldViewer<'f> {
                 .into_vec()
             })
             .collect();
+    }
+
+    fn generate(&mut self, seed: u64) {
+        self.world = World::new(seed, self.parameters.world);
+        self.update_buffer();
     }
 
     fn pixel_color(&self, x: usize, y: usize) -> Color {
@@ -200,12 +246,12 @@ impl<'f> EventHandler for WorldViewer<'f> {
             },
         )?;
 
-        let text: String = self
+        let text = self
             .rows
             .iter()
             .enumerate()
             .map(|(i, row)| {
-                let text = (row.text)(&self.world.parameters);
+                let text = (row.text)(&self.parameters);
                 if i == self.current_row {
                     format!("< {} >", text)
                 } else {
@@ -268,8 +314,11 @@ impl<'f> EventHandler for WorldViewer<'f> {
         repeat: bool,
     ) {
         if keycode == KeyCode::Return && !repeat {
-            self.world = World::new(thread_rng().next_u64(), self.world.parameters);
-            self.update_buffer();
+            self.generate(if self.parameters.shuffle_seed {
+                thread_rng().next_u64()
+            } else {
+                self.world.seed
+            });
         }
 
         if keycode == KeyCode::Up {
@@ -281,26 +330,27 @@ impl<'f> EventHandler for WorldViewer<'f> {
         }
 
         if keycode == KeyCode::Down {
-            if self.current_row >= self.rows.len() {
+            if self.current_row >= self.rows.len() - 1 {
                 self.current_row = 0
             } else {
                 self.current_row += 1;
             }
         }
 
-        if keycode == KeyCode::Right || keycode == KeyCode::Left {
+        if keycode == KeyCode::Right || keycode == KeyCode::Left || keycode == KeyCode::Space {
             let row = &mut self.rows[self.current_row];
             (row.edit)(
-                &mut self.world.parameters,
+                &mut self.parameters,
                 match keycode {
                     KeyCode::Space => EditType::Press,
-                    KeyCode::Right => EditType::Increase,
-                    KeyCode::Left => EditType::Decrease,
-                    _ => panic!(),
+                    KeyCode::Right => EditType::Right,
+                    KeyCode::Left => EditType::Left,
+                    _ => panic!("Invalid KeyCode"),
                 },
             );
-            self.world.generate();
-            self.update_buffer();
+            if self.parameters.auto_generate {
+                self.generate(self.world.seed);
+            }
         }
     }
 
@@ -311,12 +361,12 @@ impl<'f> EventHandler for WorldViewer<'f> {
 }
 
 enum EditType {
-    Increase,
-    Decrease,
+    Right,
+    Left,
     Press,
 }
 
 struct EditableRow {
-    text: Box<dyn Fn(&WorldParameters) -> String>,
-    edit: Box<dyn FnMut(&mut WorldParameters, EditType)>,
+    text: Box<dyn Fn(&WorldViewerParameters) -> String>,
+    edit: Box<dyn FnMut(&mut WorldViewerParameters, EditType)>,
 }
